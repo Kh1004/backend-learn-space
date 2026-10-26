@@ -1,0 +1,940 @@
+# Master Prompt — Build a Production-Grade Backend for an Education Content Platform
+
+## Role
+
+You are a Senior Software Architect, Principal Backend Engineer, Database Architect, Security Engineer, and DevOps Engineer.
+
+Your goal is to design and implement a production-grade backend that could realistically support **100,000+ users** while remaining simple enough for an MVP.
+
+Do **not** over-engineer with microservices. Build a **modular monolith** using NestJS 11 that can later evolve into microservices if needed.
+
+Always prioritize:
+
+* Clean Architecture
+* SOLID Principles
+* Domain-Driven Design (DDD-lite)
+* Security
+* Scalability
+* Maintainability
+* Performance
+* Extensibility
+* Testability
+* Consistent coding standards
+
+The generated code should look like enterprise software rather than tutorial code.
+
+---
+
+# Technology Stack
+
+Framework
+
+* NestJS 11
+
+Language
+
+* TypeScript 5.7+
+
+Database
+
+* PostgreSQL 16
+
+ORM
+
+* Prisma 5
+
+Authentication
+
+* JWT Access Token
+* JWT Refresh Token
+* Session Management
+
+Caching
+
+* Redis 7
+
+Queue
+
+* BullMQ
+
+Storage
+
+Initially
+
+* Local File Storage
+
+Later
+
+* MinIO
+* AWS S3
+
+API
+
+* REST API
+
+Documentation
+
+* Swagger OpenAPI
+
+Validation
+
+* class-validator
+* class-transformer
+
+Logging
+
+* Pino
+
+Configuration
+
+* @nestjs/config
+
+Email
+
+* Nodemailer
+
+Container
+
+* Docker
+
+Testing
+
+* Jest
+* Supertest
+
+---
+
+# Application Purpose
+
+Build an educational content platform where:
+
+Teachers upload educational materials.
+
+Students discover, read and download them.
+
+Admins manage the platform.
+
+This is NOT simply a past-paper application.
+
+It is a scalable education platform.
+
+---
+
+# User Roles
+
+Implement Role Based Access Control.
+
+Roles
+
+* SUPER_ADMIN
+* ADMIN
+* TEACHER
+* STUDENT
+
+Never hardcode role checks.
+
+Use permissions.
+
+Example
+
+material.create
+
+material.publish
+
+material.delete
+
+material.read
+
+teacher.verify
+
+analytics.view
+
+discussion.lock
+
+notification.send
+
+settings.update
+
+---
+
+# Architecture
+
+Use Modular Monolith.
+
+Separate infrastructure from business domains.
+
+```
+src/
+
+common/
+
+config/
+
+database/
+
+core/
+
+modules/
+```
+
+---
+
+# Core Infrastructure Modules
+
+Implement
+
+Authentication
+
+Logger
+
+Cache
+
+Queue
+
+Storage
+
+Notification
+
+Analytics
+
+Audit
+
+Events
+
+Scheduler
+
+Search
+
+Mail
+
+Health
+
+Feature Flags
+
+Webhooks
+
+These should be reusable by every business module.
+
+---
+
+# Business Modules
+
+Education
+
+* Teachers
+* Students
+* Materials
+* Categories
+* Subjects
+* Grades
+* Tags
+* Discussions
+* Comments
+* Bookmarks
+* Reactions
+* Reading Progress
+* Activity Tracking
+* Reports
+* Search
+
+Administration
+
+* Users
+* Roles
+* Permissions
+* Settings
+
+---
+
+# Material System
+
+Do NOT create separate tables like
+
+PastPaper
+
+ModelPaper
+
+Notes
+
+Instead create one generic entity.
+
+Material
+
+MaterialType enum
+
+Examples
+
+PAST_PAPER
+
+MODEL_PAPER
+
+NOTE
+
+BOOK
+
+VIDEO
+
+TUTORIAL
+
+ASSIGNMENT
+
+PRESENTATION
+
+The backend must allow adding future types without database redesign.
+
+---
+
+# Material Features
+
+Each material supports
+
+Title
+
+Description
+
+Thumbnail
+
+Files
+
+Teacher
+
+Subject
+
+Category
+
+Grade
+
+Language
+
+Visibility
+
+Status
+
+Tags
+
+Published Date
+
+Metadata JSON
+
+Status
+
+DRAFT
+
+PENDING
+
+PUBLISHED
+
+ARCHIVED
+
+Visibility
+
+PUBLIC
+
+PRIVATE
+
+FOLLOWERS
+
+GROUP
+
+PREMIUM
+
+Even if only PUBLIC is used initially, the schema must support future expansion.
+
+---
+
+# File Management
+
+Files are stored locally.
+
+Database stores metadata only.
+
+Never store binary files in PostgreSQL.
+
+Create
+
+Storage Interface
+
+Local Storage Provider
+
+Future Providers
+
+MinIO
+
+AWS S3
+
+The application should never directly call fs.
+
+Everything must go through StorageService.
+
+Support
+
+PDF
+
+Images
+
+ZIP
+
+DOCX
+
+PPTX
+
+Videos
+
+Audio
+
+---
+
+# Discussion System
+
+Each material has discussions.
+
+Support
+
+Comments
+
+Replies
+
+Likes
+
+Reports
+
+Nested replies
+
+Maximum reply depth should be configurable.
+
+Future support
+
+Forums
+
+Study Groups
+
+Teacher Q&A
+
+without redesign.
+
+---
+
+# Bookmark System
+
+Students can
+
+Bookmark
+
+Remove Bookmark
+
+View Bookmarks
+
+---
+
+# Reading Progress
+
+Track
+
+Current Page
+
+Progress Percentage
+
+Reading Time
+
+Last Read
+
+Completed
+
+Enable
+
+Continue Reading
+
+Reading History
+
+Learning Analytics
+
+---
+
+# Activity Tracking
+
+Create a generic Activity table.
+
+Never rely only on counters.
+
+Track events.
+
+Actions include
+
+VIEW
+
+OPEN
+
+READ
+
+DOWNLOAD
+
+BOOKMARK
+
+LIKE
+
+COMMENT
+
+REPORT
+
+FOLLOW
+
+LOGIN
+
+LOGOUT
+
+SEARCH
+
+Every meaningful action should create an activity event.
+
+Analytics must derive from activities.
+
+---
+
+# Analytics
+
+Teacher Dashboard
+
+Total Materials
+
+Views
+
+Downloads
+
+Bookmarks
+
+Likes
+
+Reading Completion
+
+Followers
+
+Top Materials
+
+Student Dashboard
+
+Reading Time
+
+Bookmarks
+
+Downloads
+
+Continue Reading
+
+History
+
+Admin Dashboard
+
+Users
+
+Teachers
+
+Materials
+
+Storage
+
+Traffic
+
+Daily Active Users
+
+Most Popular Subjects
+
+Most Popular Teachers
+
+Trending Materials
+
+Analytics should use event data.
+
+---
+
+# Notifications
+
+Generic notification system.
+
+Notification types
+
+Material Published
+
+Comment Reply
+
+Teacher Verified
+
+Material Approved
+
+Report Resolved
+
+Announcement
+
+Use payload JSON.
+
+Future
+
+Push Notifications
+
+Email Notifications
+
+SMS
+
+without redesign.
+
+---
+
+# Search
+
+Implement
+
+Title Search
+
+Subject Search
+
+Teacher Search
+
+Grade Search
+
+Category Search
+
+Tag Search
+
+Use PostgreSQL initially.
+
+Design an abstraction so it can later switch to
+
+Typesense
+
+Meilisearch
+
+ElasticSearch
+
+without changing APIs.
+
+---
+
+# Event Driven Architecture
+
+Avoid direct coupling.
+
+Example
+
+Teacher publishes material
+
+↓
+
+MaterialPublishedEvent
+
+↓
+
+Notification Listener
+
+↓
+
+Analytics Listener
+
+↓
+
+Audit Listener
+
+↓
+
+Search Index Listener
+
+Use Nest EventEmitter or BullMQ.
+
+---
+
+# Database Design Principles
+
+Every table includes
+
+UUID Primary Key
+
+createdAt
+
+updatedAt
+
+deletedAt
+
+createdBy
+
+updatedBy
+
+version
+
+Soft Delete
+
+Indexes
+
+Audit Fields
+
+Use JSONB where flexibility is beneficial.
+
+---
+
+# API Design
+
+Versioned
+
+/api/v1/
+
+Consistent response format
+
+Success
+
+Paginated
+
+Error
+
+Cursor pagination where appropriate.
+
+Filtering
+
+Sorting
+
+Searching
+
+Field selection
+
+---
+
+# Security
+
+Helmet
+
+Rate Limiting
+
+JWT Rotation
+
+Refresh Sessions
+
+Password Complexity
+
+Account Lockout
+
+Request Validation
+
+Role Permissions
+
+Audit Logs
+
+Secure File Upload
+
+MIME Validation
+
+Request ID
+
+Structured Logging
+
+Production Error Handling
+
+---
+
+# Performance
+
+Avoid N+1 queries.
+
+Use pagination everywhere.
+
+Optimize Prisma queries.
+
+Background processing for
+
+Notifications
+
+Thumbnail generation
+
+Analytics aggregation
+
+Email
+
+Webhook delivery
+
+Cache
+
+Popular Materials
+
+Subjects
+
+Teacher Profiles
+
+System Settings
+
+---
+
+# Logging
+
+Use structured logging.
+
+Every request includes
+
+Request ID
+
+User ID
+
+IP
+
+User Agent
+
+Duration
+
+Never log
+
+Passwords
+
+Tokens
+
+Secrets
+
+---
+
+# Audit
+
+Audit every important action.
+
+Login
+
+Logout
+
+Upload
+
+Publish
+
+Delete
+
+Approve
+
+Reject
+
+Role Changes
+
+Settings Changes
+
+Exports
+
+---
+
+# Testing
+
+Generate
+
+Unit Tests
+
+Integration Tests
+
+E2E Tests
+
+Target high coverage for services and critical flows.
+
+---
+
+# Swagger
+
+Every endpoint must include
+
+Summary
+
+Description
+
+Parameters
+
+Responses
+
+Examples
+
+Authentication requirements
+
+---
+
+# Coding Standards
+
+Use
+
+Repository Pattern where beneficial
+
+DTOs
+
+Validation
+
+Dependency Injection
+
+Interfaces
+
+Enums
+
+Constants
+
+Never duplicate logic.
+
+Keep services focused.
+
+Keep controllers thin.
+
+---
+
+# Future Expansion
+
+The architecture must support adding
+
+Courses
+
+Lessons
+
+Video Streaming
+
+Quizzes
+
+Assignments
+
+Certificates
+
+Schools
+
+Institutions
+
+Subscriptions
+
+Payments
+
+AI Tutor
+
+Flashcards
+
+OCR
+
+Recommendation Engine
+
+Forums
+
+Study Groups
+
+Live Classes
+
+without requiring major database redesign.
+
+---
+
+# Deliverables
+
+For every module provide
+
+* Folder structure
+* Prisma schema
+* DTOs
+* Controllers
+* Services
+* Repositories (where appropriate)
+* Guards
+* Decorators
+* Validation
+* Events
+* Listeners
+* Unit tests
+* E2E tests
+* Swagger documentation
+* Error handling
+* Logging
+* Audit integration
+* Security considerations
+* Performance considerations
+* Future scalability notes
+
+Never generate placeholder or tutorial-quality code.
+
+Generate production-ready code that follows enterprise standards, is modular, thoroughly documented, and designed to evolve over many years without major architectural rewrites.

@@ -1,0 +1,831 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Base User Model ───────────────────────────────────────────────────────────
+
+model User {
+  id                    String    @id @default(uuid())
+  email                 String    @unique
+  password              String
+  firstName             String    @map("first_name")
+  lastName              String    @map("last_name")
+  role                  Role      @default(USER)
+  isActive              Boolean   @default(true) @map("is_active")
+  isEmailVerified       Boolean   @default(false) @map("is_email_verified")
+  emailVerificationToken String?  @map("email_verification_token")
+  passwordResetToken    String?   @map("password_reset_token")
+  passwordResetExpires  DateTime? @map("password_reset_expires")
+  loginAttempts         Int       @default(0) @map("login_attempts")
+  lockedUntil           DateTime? @map("locked_until")
+  isSuspended           Boolean   @default(false) @map("is_suspended")
+  suspendedAt           DateTime? @map("suspended_at")
+  suspendedById         String?   @map("suspended_by_id")
+  suspensionReason      String?   @map("suspension_reason")
+  suspendedUntil        DateTime? @map("suspended_until")
+  lastLoginAt           DateTime? @map("last_login_at")
+  lastLoginIp           String?   @map("last_login_ip")
+
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  deletedAt             DateTime? @map("deleted_at")
+  createdBy             String?   @map("created_by")
+  updatedBy             String?   @map("updated_by")
+  version               Int       @default(1)
+
+  sessions              Session[]
+  auditLogs             AuditLog[] @relation("UserAuditLogs")
+  notifications         Notification[]
+  webhooksCreated       Webhook[]
+  filesUploaded         FileUpload[]
+
+  // Education domain relations
+  teacherProfile        TeacherProfile?
+  studentProfile        StudentProfile?
+  materialsAuthored     Material[]
+  comments              Comment[]
+  bookmarks             MaterialBookmark[]
+  likes                 MaterialLike[]
+  materialViews         MaterialView[]
+  readingProgress       ReadingProgress[]
+  activities            ActivityLog[]
+  followers             UserFollow[] @relation("Following")
+  following             UserFollow[] @relation("Followers")
+  materialReports       MaterialReport[] @relation("Reporter")
+
+  @@map("users")
+}
+
+// ─── Session Model (for refresh token tracking) ────────────────────────────────
+
+model Session {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  refreshToken String   @map("refresh_token")
+  userAgent    String?  @map("user_agent")
+  ipAddress    String?  @map("ip_address")
+  expiresAt    DateTime @map("expires_at")
+  isRevoked    Boolean  @default(false) @map("is_revoked")
+
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  createdBy    String?  @map("created_by")
+  updatedBy    String?  @map("updated_by")
+  version      Int      @default(1)
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([refreshToken])
+  @@map("sessions")
+}
+
+// ─── Audit Log Model ───────────────────────────────────────────────────────────
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  action      String
+  resource    String
+  resourceId  String?  @map("resource_id")
+  userId      String?  @map("user_id")
+  requestId   String?  @map("request_id")
+  description String?
+  metadata    Json?
+  ipAddress   String?  @map("ip_address")
+  userAgent   String?  @map("user_agent")
+  createdAt   DateTime @default(now()) @map("created_at")
+  createdBy   String?  @map("created_by")
+  updatedBy   String?  @map("updated_by")
+  version     Int      @default(1)
+
+  user        User?    @relation("UserAuditLogs", fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([action])
+  @@index([resource])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ─── Feature Flags ─────────────────────────────────────────────────────────────
+
+model FeatureFlag {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  name        String
+  description String?
+  enabled     Boolean  @default(false)
+  metadata    Json?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  createdBy   String?  @map("created_by")
+  updatedBy   String?  @map("updated_by")
+  version     Int      @default(1)
+
+  @@index([key])
+  @@map("feature_flags")
+}
+
+// ─── Notifications ─────────────────────────────────────────────────────────────
+
+model Notification {
+  id          String    @id @default(uuid())
+  userId      String    @map("user_id")
+  type        String
+  title       String
+  message     String
+  data        Json?
+  isRead      Boolean   @default(false) @map("is_read")
+  readAt      DateTime? @map("read_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  createdBy   String?   @map("created_by")
+  updatedBy   String?   @map("updated_by")
+  version     Int       @default(1)
+
+  user        User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+// ─── Webhooks ──────────────────────────────────────────────────────────────────
+
+model Webhook {
+  id              String    @id @default(uuid())
+  name            String
+  url             String
+  secret          String
+  events          String[]
+  isActive        Boolean   @default(true) @map("is_active")
+  lastTriggeredAt DateTime? @map("last_triggered_at")
+  failureCount    Int       @default(0) @map("failure_count")
+  createdBy       String    @map("created_by")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  updatedBy       String?   @map("updated_by")
+  version         Int       @default(1)
+
+  creator         User?     @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+  webhookLogs     WebhookLog[]
+
+  @@index([isActive])
+  @@index([createdBy])
+  @@map("webhooks")
+}
+
+model WebhookLog {
+  id          String   @id @default(uuid())
+  webhookId   String   @map("webhook_id")
+  event       String
+  payload     Json
+  statusCode  Int?     @map("status_code")
+  response    String?
+  success     Boolean  @default(false)
+  error       String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  createdBy   String?  @map("created_by")
+  updatedBy   String?  @map("updated_by")
+  version     Int      @default(1)
+
+  webhook     Webhook  @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@index([webhookId])
+  @@index([createdAt])
+  @@map("webhook_logs")
+}
+
+// ─── File Uploads ──────────────────────────────────────────────────────────────
+
+model FileUpload {
+  id           String   @id @default(uuid())
+  filename     String
+  originalName String   @map("original_name")
+  mimeType     String   @map("mime_type")
+  size         Int
+  storageKey   String   @map("storage_key")
+  storageType  String   @default("local") @map("storage_type")
+  url          String?
+  uploadedBy   String   @map("uploaded_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+  createdBy    String?  @map("created_by")
+  updatedBy    String?  @map("updated_by")
+  version      Int      @default(1)
+
+  uploader     User?    @relation(fields: [uploadedBy], references: [id], onDelete: SetNull)
+
+  thumbnailMaterials Material[] @relation("MaterialThumbnail")
+  materialFiles      MaterialFile[]
+
+  @@index([uploadedBy])
+  @@index([storageKey])
+  @@map("file_uploads")
+}
+
+// ─── Enums ──────────────────────────────────────────────────────────────────────
+
+enum Role {
+  USER
+  ADMIN
+  SUPER_ADMIN
+  TEACHER
+  STUDENT
+}
+
+// ─── Education Domain Enums ─────────────────────────────────────────────────────
+
+enum MaterialType {
+  PAST_PAPER
+  MODEL_PAPER
+  NOTE
+  BOOK
+  VIDEO
+  TUTORIAL
+  ASSIGNMENT
+  PRESENTATION
+}
+
+enum MaterialStatus {
+  DRAFT
+  PENDING
+  PUBLISHED
+  ARCHIVED
+}
+
+enum MaterialVisibility {
+  PUBLIC
+  PRIVATE
+  FOLLOWERS
+  GROUP
+  PREMIUM
+}
+
+enum ActivityType {
+  VIEW
+  OPEN
+  READ
+  DOWNLOAD
+  BOOKMARK
+  LIKE
+  COMMENT
+  REPORT
+  FOLLOW
+  UNFOLLOW
+  LOGIN
+  LOGOUT
+  SEARCH
+}
+
+enum CommentType {
+  ROOT
+  REPLY
+}
+
+enum ReportStatus {
+  PENDING
+  REVIEWING
+  RESOLVED
+  DISMISSED
+}
+
+enum VerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// ─── Subject Model ──────────────────────────────────────────────────────────────
+
+model Subject {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  slug        String   @unique
+  description String?
+  isActive    Boolean  @default(true) @map("is_active")
+  sortOrder   Int      @default(0) @map("sort_order")
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+  createdBy   String?  @map("created_by")
+  updatedBy   String?  @map("updated_by")
+  version     Int      @default(1)
+
+  materials   MaterialSubject[]
+
+  @@index([slug])
+  @@index([isActive])
+  @@map("subjects")
+}
+
+// ─── Grade Model ────────────────────────────────────────────────────────────────
+
+model Grade {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  slug        String   @unique
+  level       Int      @unique
+  description String?
+  isActive    Boolean  @default(true) @map("is_active")
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+  createdBy   String?  @map("created_by")
+  updatedBy   String?  @map("updated_by")
+  version     Int      @default(1)
+
+  materials   MaterialGrade[]
+
+  studentProfiles StudentProfile[]
+
+  @@index([slug])
+  @@index([level])
+  @@map("grades")
+}
+
+// ─── Category Model ─────────────────────────────────────────────────────────────
+
+model Category {
+  id          String     @id @default(uuid())
+  name        String     @unique
+  slug        String     @unique
+  description String?
+  parentId    String?    @map("parent_id")
+  isActive    Boolean    @default(true) @map("is_active")
+  sortOrder   Int        @default(0) @map("sort_order")
+
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+  deletedAt   DateTime?  @map("deleted_at")
+  createdBy   String?    @map("created_by")
+  updatedBy   String?    @map("updated_by")
+  version     Int        @default(1)
+
+  parent      Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children    Category[] @relation("CategoryTree")
+  materials   Material[]
+
+  @@index([slug])
+  @@index([parentId])
+  @@index([isActive])
+  @@map("categories")
+}
+
+// ─── Tag Model ──────────────────────────────────────────────────────────────────
+
+model Tag {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  slug        String   @unique
+  usageCount  Int      @default(0) @map("usage_count")
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+  createdBy   String?  @map("created_by")
+  updatedBy   String?  @map("updated_by")
+  version     Int      @default(1)
+
+  materials   MaterialTag[]
+
+  @@index([slug])
+  @@index([usageCount])
+  @@map("tags")
+}
+
+// ─── Teacher Profile ────────────────────────────────────────────────────────────
+
+model TeacherProfile {
+  id                String             @id @default(uuid())
+  userId            String             @unique @map("user_id")
+  bio               String?
+  institution       String?
+  expertise         String[]
+  qualification     String?
+  yearsOfExperience Int?               @map("years_of_experience")
+  website           String?
+  socialLinks       Json?              @map("social_links")
+  isVerified        Boolean            @default(false) @map("is_verified")
+  verifiedAt        DateTime?          @map("verified_at")
+  verifiedById      String?            @map("verified_by_id")
+  followerCount     Int                @default(0) @map("follower_count")
+  materialCount     Int                @default(0) @map("material_count")
+
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+  deletedAt         DateTime?          @map("deleted_at")
+  createdBy         String?            @map("created_by")
+  updatedBy         String?            @map("updated_by")
+  version           Int                @default(1)
+
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isVerified])
+  @@map("teacher_profiles")
+}
+
+// ─── Student Profile ────────────────────────────────────────────────────────────
+
+model StudentProfile {
+  id              String    @id @default(uuid())
+  userId          String    @unique @map("user_id")
+  gradeId         String?   @map("grade_id")
+  institution     String?
+  enrollmentYear  Int?      @map("enrollment_year")
+  interests       String[]
+  readingGoal     Int?      @map("reading_goal")
+  totalReadTime   Int       @default(0) @map("total_read_time")
+
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
+  createdBy       String?   @map("created_by")
+  updatedBy       String?   @map("updated_by")
+  version         Int       @default(1)
+
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  grade           Grade?    @relation(fields: [gradeId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([gradeId])
+  @@map("student_profiles")
+}
+
+// ─── Material (core entity) ─────────────────────────────────────────────────────
+
+model Material {
+  id              String             @id @default(uuid())
+  title           String
+  slug            String             @unique
+  description     String?
+  content         String?
+  type            MaterialType       @default(NOTE)
+  status          MaterialStatus     @default(DRAFT)
+  visibility      MaterialVisibility @default(PUBLIC)
+  language        String             @default("en")
+  authorId        String             @map("author_id")
+  categoryId      String?            @map("category_id")
+  thumbnailId     String?            @map("thumbnail_id")
+  viewCount       Int                @default(0) @map("view_count")
+  downloadCount   Int                @default(0) @map("download_count")
+  bookmarkCount   Int                @default(0) @map("bookmark_count")
+  likeCount       Int                @default(0) @map("like_count")
+  commentCount    Int                @default(0) @map("comment_count")
+  readingTime     Int?               @map("reading_time")
+  publishedAt     DateTime?          @map("published_at")
+  metadata        Json?
+
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+  deletedAt       DateTime?          @map("deleted_at")
+  createdBy       String?            @map("created_by")
+  updatedBy       String?            @map("updated_by")
+  version         Int                @default(1)
+
+  author          User               @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  category        Category?          @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  thumbnail       FileUpload?        @relation("MaterialThumbnail", fields: [thumbnailId], references: [id], onDelete: SetNull)
+
+  files           MaterialFile[]
+  subjects        MaterialSubject[]
+  grades          MaterialGrade[]
+  tags            MaterialTag[]
+  comments        Comment[]
+  bookmarks       MaterialBookmark[]
+  likes           MaterialLike[]
+  views           MaterialView[]
+  readingProgress ReadingProgress[]
+  reports         MaterialReport[]
+
+  @@index([authorId])
+  @@index([categoryId])
+  @@index([status])
+  @@index([type])
+  @@index([visibility])
+  @@index([publishedAt])
+  @@index([createdAt])
+  @@index([slug])
+  @@map("materials")
+}
+
+// ─── Material File (junction: material <-> file) ────────────────────────────────
+
+model MaterialFile {
+  id          String   @id @default(uuid())
+  materialId  String   @map("material_id")
+  fileId      String   @map("file_id")
+  isPrimary   Boolean  @default(false) @map("is_primary")
+  sortOrder   Int      @default(0) @map("sort_order")
+  label       String?
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  createdBy   String?  @map("created_by")
+  updatedBy   String?  @map("updated_by")
+  version     Int      @default(1)
+
+  material    Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  file        FileUpload @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@unique([materialId, fileId])
+  @@index([materialId])
+  @@index([fileId])
+  @@map("material_files")
+}
+
+// ─── Material Subject (many-to-many) ────────────────────────────────────────────
+
+model MaterialSubject {
+  id          String   @id @default(uuid())
+  materialId  String   @map("material_id")
+  subjectId   String   @map("subject_id")
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  createdBy   String?  @map("created_by")
+  updatedBy   String?  @map("updated_by")
+  version     Int      @default(1)
+
+  material    Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  subject     Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@unique([materialId, subjectId])
+  @@index([materialId])
+  @@index([subjectId])
+  @@map("material_subjects")
+}
+
+// ─── Material Grade (many-to-many) ──────────────────────────────────────────────
+
+model MaterialGrade {
+  id          String   @id @default(uuid())
+  materialId  String   @map("material_id")
+  gradeId     String   @map("grade_id")
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  createdBy   String?  @map("created_by")
+  updatedBy   String?  @map("updated_by")
+  version     Int      @default(1)
+
+  material    Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  grade       Grade    @relation(fields: [gradeId], references: [id], onDelete: Cascade)
+
+  @@unique([materialId, gradeId])
+  @@index([materialId])
+  @@index([gradeId])
+  @@map("material_grades")
+}
+
+// ─── Material Tag (many-to-many) ────────────────────────────────────────────────
+
+model MaterialTag {
+  id          String   @id @default(uuid())
+  materialId  String   @map("material_id")
+  tagId       String   @map("tag_id")
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  createdBy   String?  @map("created_by")
+  updatedBy   String?  @map("updated_by")
+  version     Int      @default(1)
+
+  material    Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  tag         Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([materialId, tagId])
+  @@index([materialId])
+  @@index([tagId])
+  @@map("material_tags")
+}
+
+// ─── Comment ────────────────────────────────────────────────────────────────────
+
+model Comment {
+  id          String      @id @default(uuid())
+  materialId  String      @map("material_id")
+  userId      String      @map("user_id")
+  parentId    String?     @map("parent_id")
+  content     String
+  type        CommentType @default(ROOT)
+  likeCount   Int         @default(0) @map("like_count")
+  isEdited    Boolean     @default(false) @map("is_edited")
+  isPinned    Boolean     @default(false) @map("is_pinned")
+
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+  deletedAt   DateTime?   @map("deleted_at")
+  createdBy   String?     @map("created_by")
+  updatedBy   String?     @map("updated_by")
+  version     Int         @default(1)
+
+  material    Material    @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent      Comment?    @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies     Comment[]   @relation("CommentReplies")
+
+  @@index([materialId])
+  @@index([userId])
+  @@index([parentId])
+  @@index([createdAt])
+  @@map("comments")
+}
+
+// ─── Material Bookmark ──────────────────────────────────────────────────────────
+
+model MaterialBookmark {
+  id          String   @id @default(uuid())
+  materialId  String   @map("material_id")
+  userId      String   @map("user_id")
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  createdBy   String?  @map("created_by")
+  updatedBy   String?  @map("updated_by")
+  version     Int      @default(1)
+
+  material    Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([materialId, userId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("material_bookmarks")
+}
+
+// ─── Material Like ──────────────────────────────────────────────────────────────
+
+model MaterialLike {
+  id          String   @id @default(uuid())
+  materialId  String   @map("material_id")
+  userId      String   @map("user_id")
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  createdBy   String?  @map("created_by")
+  updatedBy   String?  @map("updated_by")
+  version     Int      @default(1)
+
+  material    Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([materialId, userId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("material_likes")
+}
+
+// ─── Material View ──────────────────────────────────────────────────────────────
+
+model MaterialView {
+  id          String   @id @default(uuid())
+  materialId  String   @map("material_id")
+  userId      String?  @map("user_id")
+  ip          String?
+  userAgent   String?  @map("user_agent")
+  referrer    String?
+  duration    Int?
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  createdBy   String?  @map("created_by")
+  updatedBy   String?  @map("updated_by")
+  version     Int      @default(1)
+
+  material    Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([materialId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("material_views")
+}
+
+// ─── Reading Progress ───────────────────────────────────────────────────────────
+
+model ReadingProgress {
+  id              String    @id @default(uuid())
+  materialId      String    @map("material_id")
+  userId          String    @map("user_id")
+  currentPage     Int       @default(0) @map("current_page")
+  progressPercent Float     @default(0) @map("progress_percent")
+  readingTime     Int       @default(0) @map("reading_time")
+  isCompleted     Boolean   @default(false) @map("is_completed")
+  completedAt     DateTime? @map("completed_at")
+
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  createdBy       String?   @map("created_by")
+  updatedBy       String?   @map("updated_by")
+  version         Int       @default(1)
+
+  material        Material  @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([materialId, userId])
+  @@index([userId])
+  @@index([isCompleted])
+  @@map("reading_progress")
+}
+
+// ─── Activity Log ───────────────────────────────────────────────────────────────
+
+model ActivityLog {
+  id            String       @id @default(uuid())
+  userId        String       @map("user_id")
+  action        ActivityType
+  resourceType  String       @map("resource_type")
+  resourceId    String       @map("resource_id")
+  metadata      Json?
+  ip            String?
+  userAgent     String?      @map("user_agent")
+
+  createdAt     DateTime     @default(now()) @map("created_at")
+  createdBy     String?      @map("created_by")
+  updatedBy     String?      @map("updated_by")
+  version       Int          @default(1)
+
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([action])
+  @@index([resourceType, resourceId])
+  @@index([createdAt])
+  @@map("activity_logs")
+}
+
+// ─── User Follow ────────────────────────────────────────────────────────────────
+
+model UserFollow {
+  id            String    @id @default(uuid())
+  followerId    String    @map("follower_id")
+  followingId   String    @map("following_id")
+
+  createdAt     DateTime  @default(now()) @map("created_at")
+  createdBy     String?   @map("created_by")
+  updatedBy     String?   @map("updated_by")
+  version       Int       @default(1)
+
+  follower      User      @relation("Following", fields: [followerId], references: [id], onDelete: Cascade)
+  following     User      @relation("Followers", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
+  @@index([createdAt])
+  @@map("user_follows")
+}
+
+// ─── Material Report ────────────────────────────────────────────────────────────
+
+model MaterialReport {
+  id            String       @id @default(uuid())
+  materialId    String       @map("material_id")
+  reporterId    String       @map("reporter_id")
+  reason        String
+  description   String?
+  status        ReportStatus @default(PENDING)
+  resolvedAt    DateTime?    @map("resolved_at")
+  resolvedById  String?      @map("resolved_by_id")
+  resolution    String?
+
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+  createdBy     String?      @map("created_by")
+  updatedBy     String?      @map("updated_by")
+  version       Int          @default(1)
+
+  material      Material     @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  reporter      User         @relation("Reporter", fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@index([materialId])
+  @@index([reporterId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("material_reports")
+}
+
+// ─── Platform Settings ─────────────────────────────────────────────────────────
+
+model PlatformSetting {
+  id            String   @id @default(uuid())
+  key           String   @unique
+  value         String
+  description   String?
+  category      String   @default("general")
+  isPublic      Boolean  @default(false) @map("is_public")
+  isActive      Boolean  @default(true) @map("is_active")
+
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+  createdBy     String?  @map("created_by")
+  updatedBy     String?  @map("updated_by")
+  version       Int      @default(1)
+
+  @@index([key])
+  @@index([category])
+  @@index([isActive])
+  @@map("platform_settings")
+}
