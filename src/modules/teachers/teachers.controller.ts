@@ -17,7 +17,12 @@ import {
   ApiParam,
 } from '@nestjs/swagger';
 import { TeachersService } from './teachers.service';
-import { CreateTeacherProfileDto, UpdateTeacherProfileDto } from './dto';
+import {
+  CreateTeacherProfileDto,
+  UpdateTeacherProfileDto,
+  CreateTeacherPostDto,
+  VerifyTeacherDto,
+} from './dto';
 import { PaginationQueryDto } from '../../common/dtos';
 import { Roles, Public } from '../../common/decorators';
 import { Role } from '../../common/enums';
@@ -37,7 +42,15 @@ export class TeachersController {
     return this.teachersService.findAll(query);
   }
 
-  @Get(':id')
+  @Get("posts")
+  @Public()
+  @ApiOperation({ summary: "Get teacher profile posts / announcements" })
+  @ApiResponse({ status: 200, description: "Teacher posts list" })
+  findAllPosts(@Query("teacherId") teacherId?: string) {
+    return this.teachersService.findAllPosts(teacherId);
+  }
+
+  @Get(":id")
   @Public()
   @ApiOperation({ summary: 'Get teacher profile by ID' })
   @ApiParam({ name: 'id', description: 'Profile UUID' })
@@ -73,16 +86,30 @@ export class TeachersController {
     return this.teachersService.update(id, dto, req.user.sub, isAdmin);
   }
 
-  @Post(':id/verify')
+  @Post(":id/verify")
   @Roles(Role.ADMIN, Role.SUPER_ADMIN)
-  @ApiOperation({ summary: 'Verify teacher (Admin)' })
-  @ApiParam({ name: 'id', description: 'Profile UUID' })
-  @ApiResponse({ status: 200, description: 'Teacher verified' })
+  @ApiOperation({ summary: "Verify or reject teacher profile (Admin)" })
+  @ApiParam({ name: "id", description: "Profile UUID" })
+  @ApiResponse({ status: 200, description: "Teacher verification status updated" })
   verify(
-    @Param('id') id: string,
+    @Param("id") id: string,
+    @Body() dto: VerifyTeacherDto,
     @Req() req: AuthenticatedRequest,
   ) {
-    return this.teachersService.verify(id, req.user.sub);
+    return this.teachersService.verify(id, req.user.sub, dto?.decision ?? "Verified");
+  }
+
+  @Post(":id/posts")
+  @Roles(Role.TEACHER, Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({ summary: "Publish a post or announcement on teacher profile" })
+  @ApiParam({ name: "id", description: "Teacher Profile UUID" })
+  @ApiResponse({ status: 201, description: "Teacher post created" })
+  createPost(
+    @Param("id") id: string,
+    @Body() dto: CreateTeacherPostDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.teachersService.createPost(id, dto, req.user.sub);
   }
 
   @Delete(':id')

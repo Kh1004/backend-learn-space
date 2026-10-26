@@ -15,7 +15,7 @@ import {
   buildSoftDeleteFilter,
 } from '../../database/helpers';
 import { CreateMaterialDto, UpdateMaterialDto, MaterialQueryDto } from './dto';
-import { Prisma, MaterialStatus } from '@prisma/client';
+import { Prisma, MaterialStatus, MaterialVisibility } from '@prisma/client';
 import { AuthenticatedRequest } from '../../common/interfaces';
 import {
   MaterialPublishedEvent,
@@ -42,7 +42,11 @@ export class MaterialsService {
     commentCount: true,
     readingTime: true,
     publishedAt: true,
+    moderationStatus: true,
     metadata: true,
+    allowedStudents: {
+      select: { studentId: true },
+    },
     createdAt: true,
     updatedAt: true,
     author: {
@@ -208,6 +212,14 @@ export class MaterialsService {
             create: dto.tagIds.map((tagId) => ({ tagId })),
           },
         }),
+        ...(dto.allowedStudentIds?.length && {
+          allowedStudents: {
+            create: dto.allowedStudentIds.map((studentId) => ({
+              studentId,
+              grantedBy: authorId,
+            })),
+          },
+        }),
         ...(dto.fileIds?.length && {
           files: {
             create: dto.fileIds.map((fileId, index) => ({
@@ -295,6 +307,19 @@ export class MaterialsService {
             data: dto.tagIds.map((tagId) => ({
               materialId: id,
               tagId,
+            })),
+          });
+        }
+      }
+
+      if (dto.allowedStudentIds) {
+        await tx.materialAllowedStudent.deleteMany({ where: { materialId: id } });
+        if (dto.allowedStudentIds.length > 0) {
+          await tx.materialAllowedStudent.createMany({
+            data: dto.allowedStudentIds.map((studentId) => ({
+              materialId: id,
+              studentId,
+              grantedBy: userId,
             })),
           });
         }
@@ -391,6 +416,102 @@ export class MaterialsService {
     );
 
     return material;
+  }
+
+  async recordDownload(id: string, userId?: string) {
+    const material = await this.prisma.material.findFirst({
+      where: { id, deletedAt: null },
+      include: {
+        allowedStudents: { select: { studentId: true } },
+      },
+    });
+    if (!material) {
+      throw new NotFoundException("Material not found");
+    }
+
+    // Enforce Followers-Only access
+    if (
+      material.visibility === MaterialVisibility.FOLLOWERS &&
+      material.authorId !== userId
+    ) {
+      if (!userId) {
+        throw new ForbiddenException("Follow this teacher to download Followers-Only materials");
+      }
+      const isFollowing = await this.prisma.userFollow.findUnique({
+        where: {
+          followerId_followingId: {
+            followerId: userId,
+            followingId: material.authorId,
+          },
+        },
+      });
+      if (!isFollowing) {
+        throw new ForbiddenException("Follow this teacher to download Followers-Only materials");
+      }
+    }
+
+    // Enforce Restricted (GROUP) student allow-list access
+    if (
+      material.visibility === MaterialVisibility.GROUP &&
+      material.authorId !== userId
+    ) {
+      const allowedIds = material.allowedStudents.map((s) => s.studentId);
+      if (!userId || !allowedIds.includes(userId)) {
+        throw new ForbiddenException("This material is restricted to selected students only");
+      }
+    }
+
+    const updated = await this.prisma.material.update({
+      where: { id },
+      data: { downloadCount: { increment: 1 } },
+      select: this.materialSelect,
+    });
+
+    await this.prisma.teacherProfile.updateMany({
+      where: { userId: material.authorId },
+      data: { totalDownloads: { increment: 1 } },
+    });
+
+    this.logger.log(`Material downloaded: ${id} by ${userId ?? "anonymous"}`);
+    return updated;
+  }
+
+  async moderate(
+    id: string,
+    status: "Approved" | "Under Review" | "Removed",
+    moderatorId: string,
+  ) {
+    const existing = await this.prisma.material.findFirst({
+      where: { id, deletedAt: null },
+    });
+    if (!existing) {
+      throw new NotFoundException("Material not found");
+    }
+
+    if (status === "Removed") {
+      await this.prisma.material.update({
+        where: { id },
+        data: {
+          moderationStatus: "Removed",
+          status: MaterialStatus.ARCHIVED,
+          deletedAt: new Date(),
+          updatedBy: moderatorId,
+        },
+      });
+      this.logger.log(`Material removed by moderator ${moderatorId}: ${id}`);
+      return { id, removed: true };
+    }
+
+    const updated = await this.prisma.material.update({
+      where: { id },
+      data: {
+        moderationStatus: status,
+        updatedBy: moderatorId,
+      },
+      select: this.materialSelect,
+    });
+    this.logger.log(`Material ${id} moderation status set to ${status} by ${moderatorId}`);
+    return updated;
   }
 
   private slugify(text: string): string {

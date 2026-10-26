@@ -83,7 +83,13 @@ export class CreateMaterialDto {
   @IsOptional()
   readingTime?: number;
 
-  @ApiPropertyOptional({ description: 'Additional metadata' })
+  @ApiPropertyOptional({ description: "Allowed Student UUIDs for Restricted (GROUP) visibility", type: [String] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  allowedStudentIds?: string[];
+
+  @ApiPropertyOptional({ description: "Additional metadata" })
   @IsOptional()
   metadata?: Record<string, unknown>;
 }

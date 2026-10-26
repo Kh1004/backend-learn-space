@@ -23,6 +23,7 @@ import {
   UpdateMaterialDto,
   MaterialQueryDto,
   MaterialResponseDto,
+  ModerateMaterialDto,
 } from './dto';
 import { Roles, Public, ApiPaginatedResponse } from '../../common/decorators';
 import { Role } from '../../common/enums';
@@ -148,7 +149,33 @@ export class MaterialsController {
     return this.materialsService.archive(id, req.user.sub);
   }
 
-  @Post(':id/restore')
+  @Post(":id/download")
+  @Public()
+  @ApiOperation({ summary: "Record material download and validate access level (Public / Followers / Restricted)" })
+  @ApiParam({ name: "id", description: "Material UUID" })
+  @ApiResponse({ status: 200, description: "Download recorded" })
+  @ApiResponse({ status: 403, description: "Restricted or Followers-only access denied" })
+  recordDownload(
+    @Param("id") id: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.materialsService.recordDownload(id, req.user?.sub);
+  }
+
+  @Post(":id/moderate")
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({ summary: "Moderate educational material (Admin)" })
+  @ApiParam({ name: "id", description: "Material UUID" })
+  @ApiResponse({ status: 200, description: "Material moderation status updated" })
+  moderate(
+    @Param("id") id: string,
+    @Body() dto: ModerateMaterialDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.materialsService.moderate(id, dto.status, req.user.sub);
+  }
+
+  @Post(":id/restore")
   @Roles(Role.TEACHER, Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'Restore deleted material (Author/Admin)' })
   @ApiParam({ name: 'id', description: 'Material UUID' })

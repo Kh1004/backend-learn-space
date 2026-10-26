@@ -57,6 +57,10 @@ model User {
   followers             UserFollow[] @relation("Following")
   following             UserFollow[] @relation("Followers")
   materialReports       MaterialReport[] @relation("Reporter")
+  allowedMaterials      MaterialAllowedStudent[]
+  studentThreads        DirectMessageThread[] @relation("StudentThreads")
+  teacherThreads        DirectMessageThread[] @relation("TeacherThreads")
+  sentMessages          DirectMessage[]
 
   @@map("users")
 }
@@ -412,7 +416,10 @@ model TeacherProfile {
   yearsOfExperience Int?               @map("years_of_experience")
   website           String?
   socialLinks       Json?              @map("social_links")
-  isVerified        Boolean            @default(false) @map("is_verified")
+  isVerified         Boolean            @default(false) @map("is_verified")
+  verificationStatus VerificationStatus @default(PENDING) @map("verification_status")
+  profileViews       Int                @default(0) @map("profile_views")
+  totalDownloads     Int                @default(0) @map("total_downloads")
   verifiedAt        DateTime?          @map("verified_at")
   verifiedById      String?            @map("verified_by_id")
   followerCount     Int                @default(0) @map("follower_count")
@@ -426,6 +433,7 @@ model TeacherProfile {
   version           Int                @default(1)
 
   user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  posts             TeacherPost[]
 
   @@index([userId])
   @@index([isVerified])
@@ -479,7 +487,8 @@ model Material {
   bookmarkCount   Int                @default(0) @map("bookmark_count")
   likeCount       Int                @default(0) @map("like_count")
   commentCount    Int                @default(0) @map("comment_count")
-  readingTime     Int?               @map("reading_time")
+  readingTime      Int?               @map("reading_time")
+  moderationStatus String             @default("Approved") @map("moderation_status")
   publishedAt     DateTime?          @map("published_at")
   metadata        Json?
 
@@ -504,6 +513,8 @@ model Material {
   views           MaterialView[]
   readingProgress ReadingProgress[]
   reports         MaterialReport[]
+  allowedStudents MaterialAllowedStudent[]
+  attachedInPosts TeacherPost[]
 
   @@index([authorId])
   @@index([categoryId])
@@ -828,4 +839,78 @@ model PlatformSetting {
   @@index([category])
   @@index([isActive])
   @@map("platform_settings")
+}
+
+
+// ─── Material Allowed Student (Restricted / Group Access Control) ───────────────
+model MaterialAllowedStudent {
+  id          String   @id @default(uuid())
+  materialId  String   @map("material_id")
+  studentId   String   @map("student_id")
+  grantedBy   String?  @map("granted_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  material    Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  student     User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([materialId, studentId])
+  @@index([materialId])
+  @@index([studentId])
+  @@map("material_allowed_students")
+}
+
+// ─── Teacher Profile Post (Social Learning Feed & Announcements) ───────────────
+model TeacherPost {
+  id                 String         @id @default(uuid())
+  teacherId          String         @map("teacher_id")
+  content            String
+  attachedMaterialId String?        @map("attached_material_id")
+  likeCount          Int            @default(0) @map("like_count")
+  commentCount       Int            @default(0) @map("comment_count")
+  createdAt          DateTime       @default(now()) @map("created_at")
+  updatedAt          DateTime       @updatedAt @map("updated_at")
+  deletedAt          DateTime?      @map("deleted_at")
+
+  teacher            TeacherProfile @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  attachedMaterial   Material?      @relation(fields: [attachedMaterialId], references: [id], onDelete: SetNull)
+
+  @@index([teacherId])
+  @@index([createdAt])
+  @@map("teacher_posts")
+}
+
+// ─── Direct Message Thread (Student <-> Teacher Messaging) ─────────────────────
+model DirectMessageThread {
+  id            String          @id @default(uuid())
+  studentId     String          @map("student_id")
+  teacherUserId String          @map("teacher_user_id")
+  lastMessage   String?         @map("last_message")
+  unreadCount   Int             @default(0) @map("unread_count")
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+
+  student       User            @relation("StudentThreads", fields: [studentId], references: [id], onDelete: Cascade)
+  teacher       User            @relation("TeacherThreads", fields: [teacherUserId], references: [id], onDelete: Cascade)
+  messages      DirectMessage[]
+
+  @@unique([studentId, teacherUserId])
+  @@index([studentId])
+  @@index([teacherUserId])
+  @@map("direct_message_threads")
+}
+
+model DirectMessage {
+  id        String              @id @default(uuid())
+  threadId  String              @map("thread_id")
+  senderId  String              @map("sender_id")
+  text      String
+  isRead    Boolean             @default(false) @map("is_read")
+  createdAt DateTime            @default(now()) @map("created_at")
+
+  thread    DirectMessageThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  sender    User                @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([threadId])
+  @@index([senderId])
+  @@map("direct_messages")
 }

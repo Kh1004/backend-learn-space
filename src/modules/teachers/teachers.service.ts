@@ -15,7 +15,12 @@ import {
   buildSearchFilter,
   buildSoftDeleteFilter,
 } from '../../database/helpers';
-import { CreateTeacherProfileDto, UpdateTeacherProfileDto } from './dto';
+import {
+  CreateTeacherProfileDto,
+  UpdateTeacherProfileDto,
+  CreateTeacherPostDto,
+} from './dto';
+import { VerificationStatus } from '@prisma/client';
 
 @Injectable()
 export class TeachersService {
@@ -31,9 +36,12 @@ export class TeachersService {
     website: true,
     socialLinks: true,
     isVerified: true,
+    verificationStatus: true,
     verifiedAt: true,
     followerCount: true,
     materialCount: true,
+    profileViews: true,
+    totalDownloads: true,
     createdAt: true,
     updatedAt: true,
     user: {

@@ -56,6 +56,7 @@ import { FollowsModule } from './modules/follows/follows.module';
 import { SearchModule } from './modules/search/search.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { LikesModule } from './modules/likes/likes.module';
+import { MessagesModule } from './modules/messages/messages.module';
 
 // Common
 import { JwtAuthGuard } from './modules/auth/guards';
@@ -135,6 +136,7 @@ import { RequestIdMiddleware } from './common/middleware';
     ReadingProgressModule,
     FollowsModule,
     LikesModule,
+    MessagesModule,
     SearchModule,
 
     // Admin features
